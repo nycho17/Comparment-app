@@ -38,7 +38,7 @@
 <body>
   <header>
     <h1>CPT Quick Lookup</h1>
-    <div class="sub">현장용 초간단 · 조회 전용 · 기준키: CPT(H열)</div>
+    <div class="sub">현장용 초간단 · 조회 전용 · 기준키: CPT(H열) · v5.0</div>
   </header>
 
   <main>
@@ -56,6 +56,58 @@
         <button id="installBtn" class="secondary hidden">홈화면에 설치</button>
       </div>
     </div>
+
+    
+    
+    <div id="homeSummary" class="card">
+      <div style="font-weight:800;margin-bottom:10px">요약 (전체 / 지역별)</div>
+
+      <div class="grid" style="margin-bottom:10px">
+        <div class="kv item" id="overallCard" style="cursor:pointer">
+          <div class="k">전체 면적(HA)</div>
+          <div class="v" id="overallArea">-</div>
+        </div>
+        <div class="kv item" id="overallCptCard" style="cursor:pointer">
+          <div class="k">전체 CPT 수</div>
+          <div class="v" id="overallCount">-</div>
+        </div>
+        <div class="kv item" id="overallAssetCard" style="cursor:pointer">
+          <div class="k">전체 조림자산(계)</div>
+          <div class="v" id="overallAsset">-</div>
+        </div>
+        <div class="kv">
+          <div class="k">현재 보기</div>
+          <div class="v" id="currentScope">전체</div>
+        </div>
+      </div>
+
+      <div class="toolbar" style="margin-bottom:10px">
+        <span class="pill" id="scopePill" style="display:none"></span>
+        <button id="clearScopeBtn" class="secondary hidden">필터 해제</button>
+      </div>
+
+      <div style="font-weight:700;margin:6px 0 8px 0">지역별 합계 (클릭하면 세부자료)</div>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr><th>지역</th><th>면적(HA)</th><th>CPT 수</th><th>조림자산(계)</th></tr>
+          </thead>
+          <tbody id="regionStatsBody"></tbody>
+        </table>
+      </div>
+      <div class="muted" style="font-size:13px;margin-top:8px">※ 지역 행을 누르면 해당 지역 CPT 목록으로 이동합니다.</div>
+    </div>
+
+
+    <div id="updateBanner" class="card hidden" style="border:1px solid #f79009">
+      <div style="font-weight:800;margin-bottom:6px">새 버전이 있습니다</div>
+      <div class="muted" style="font-size:13px;margin-bottom:10px">업데이트를 적용하려면 아래 버튼을 누르세요.</div>
+      <div class="toolbar">
+        <button id="reloadBtn">업데이트 적용</button>
+        <button id="dismissBtn" class="secondary">나중에</button>
+      </div>
+    </div>
+
 
     <section id="listView">
       <div class="card">

@@ -1,3 +1,4 @@
+const APP_VERSION = 'v5.0';
 // Field-simple offline-first PWA (read-only)
 const state = {
   list: [],
@@ -7,6 +8,7 @@ const state = {
   segByCpt: new Map(),
   filtered: [],
   deferredPrompt: null,
+  scope: { type: 'all', value: null },
 };
 
 const el = (id) => document.getElementById(id);
@@ -149,14 +151,23 @@ function renderQuickSummary(){
 
 function applySearch(){
   const q = el('q').value.trim().toUpperCase();
-  if (!q){
-    state.filtered = state.list.slice(0, 30);
-  } else {
-    state.filtered = state.list.filter(r => (r.CPT||'').toUpperCase().includes(q)).slice(0, 30);
+
+  // base set (optionally scoped)
+  let base = state.list;
+  if (state.scope && state.scope.type === 'region' && state.scope.value){
+    base = base.filter(r => String(r['지역'] || '').trim() === state.scope.value);
   }
+
+  if (!q){
+    state.filtered = base.slice(0, 200);
+  } else {
+    state.filtered = base.filter(r => (r.CPT||'').toUpperCase().includes(q)).slice(0, 200);
+  }
+
   el('pillCount').textContent = `표시: ${state.filtered.length}건`;
   renderList();
   renderQuickSummary();
+  renderHomeSummary(); // update scope label
 }
 
 function renderList(){
@@ -305,9 +316,134 @@ function setupEvents(){
   el('back').addEventListener('click', backToList);
 }
 
+
+
+function renderHomeSummary(){
+  const rows = state.detail || [];
+  const areaSum = rows.reduce((acc,r)=> acc + toNum(r['HA']), 0);
+  const assetSum = rows.reduce((acc,r)=> acc + toNum(r['조림자산 계']), 0);
+  const count = rows.length;
+
+  const oa = el('overallArea'); if (oa) oa.textContent = fmt(areaSum);
+  const oc = el('overallCount'); if (oc) oc.textContent = fmt(count);
+  const os = el('overallAsset'); if (os) os.textContent = fmt(assetSum);
+
+  const scopeLabel = el('currentScope');
+  const scopePill = el('scopePill');
+  const clearBtn = el('clearScopeBtn');
+  if (state.scope && state.scope.type === 'region' && state.scope.value){
+    if (scopeLabel) scopeLabel.textContent = `지역: ${state.scope.value}`;
+    if (scopePill){
+      scopePill.style.display = 'inline-block';
+      scopePill.textContent = `지역 필터: ${state.scope.value}`;
+    }
+    if (clearBtn) clearBtn.classList.remove('hidden');
+  } else {
+    if (scopeLabel) scopeLabel.textContent = '전체';
+    if (scopePill){
+      scopePill.style.display = 'none';
+      scopePill.textContent = '';
+    }
+    if (clearBtn) clearBtn.classList.add('hidden');
+  }
+
+  // Region stats
+  const regions = computeStats(rows, '지역').sort((a,b)=> b.area - a.area);
+  const body = el('regionStatsBody');
+  if (body){
+    body.innerHTML = '';
+    for (const r of regions){
+      const keyEsc = r.key.replace(/"/g,'&quot;');
+      body.insertAdjacentHTML('beforeend',
+        `<tr class="item" data-region="${keyEsc}" style="cursor:pointer">
+           <td>${r.key}</td><td>${fmt(r.area)}</td><td>${fmt(r.count)}</td><td>${fmt(r.asset)}</td>
+         </tr>`);
+    }
+    // click handlers (event delegation)
+    body.querySelectorAll('tr[data-region]').forEach(tr => {
+      tr.addEventListener('click', () => {
+        const region = tr.getAttribute('data-region');
+        setRegionScope(region);
+      });
+    });
+  }
+}
+
+function setRegionScope(region){
+  state.scope = {type:'region', value: region};
+  el('q').value = '';
+  applySearch();
+  // jump to results
+  const listView = el('listView');
+  if (listView) listView.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function clearScope(){
+  state.scope = {type:'all', value:null};
+  el('q').value = '';
+  applySearch();
+}
+
+
+function setupSWUpdate(){
+  if (!('serviceWorker' in navigator)) return;
+
+  const banner = el('updateBanner');
+  const reloadBtn = el('reloadBtn');
+  const dismissBtn = el('dismissBtn');
+
+  function showBanner(){
+    if (banner) banner.classList.remove('hidden');
+  }
+  function hideBanner(){
+    if (banner) banner.classList.add('hidden');
+  }
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // New SW has taken control
+    window.location.reload();
+  });
+
+  navigator.serviceWorker.getRegistration().then((reg) => {
+    if (!reg) return;
+    // If there's already a waiting worker, prompt immediately
+    if (reg.waiting) showBanner();
+
+    reg.addEventListener('updatefound', () => {
+      const newWorker = reg.installing;
+      if (!newWorker) return;
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed') {
+          // If there's an existing controller, it's an update
+          if (navigator.serviceWorker.controller) showBanner();
+        }
+      });
+    });
+
+    if (reloadBtn){
+      reloadBtn.addEventListener('click', () => {
+        if (reg.waiting){
+          reg.waiting.postMessage({type:'SKIP_WAITING'});
+        } else {
+          // fallback
+          window.location.reload();
+        }
+      });
+    }
+    if (dismissBtn){
+      dismissBtn.addEventListener('click', hideBanner);
+    }
+  });
+}
+
 async function registerSW(){
   if (!('serviceWorker' in navigator)) return;
-  try { await navigator.serviceWorker.register('sw.js'); } catch(e) {}
+  try {
+    const reg = await navigator.serviceWorker.register('sw.js');
+    // Ask browser to check for updates
+    if (reg && reg.update) reg.update();
+    setupSWUpdate();
+  } catch(e) {}
 }
 
 setupEvents();

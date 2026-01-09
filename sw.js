@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cpt-quick-v1';
+const CACHE_NAME = 'cpt-quick-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -41,4 +41,9 @@ self.addEventListener('fetch', (event) => {
       return fallback || new Response('Offline', {status: 200, headers:{'Content-Type':'text/plain'}});
     }
   })());
+});
+
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
