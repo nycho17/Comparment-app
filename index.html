@@ -38,7 +38,7 @@
 <body>
   <header>
     <h1>CPT Quick Lookup</h1>
-    <div class="sub">현장용 초간단 · 조회 전용 · 기준키: CPT(H열) · v5.0</div>
+    <div class="sub">현장용 초간단 · 조회 전용 · 기준키: CPT(H열) · v7.0</div>
   </header>
 
   <main>
@@ -158,7 +158,7 @@
 
       <div class="card">
         <div style="font-weight:700;margin-bottom:8px">식재연도별 합계</div>
-        <div class="muted" style="font-size:13px;margin-bottom:10px">면적(HA) 합계와 조림자산(계) 합계</div>
+        <div class="muted" style="font-size:13px;margin-bottom:10px">면적(HA) 합계와 조림자산(계) 합계 (※ 생산완료: 생산연도 ≤ 2025 는 운영 통계에서 제외)</div>
         <div style="overflow:auto">
           <table>
             <thead>
@@ -169,9 +169,25 @@
         </div>
       </div>
 
+
+      <div class="card">
+        <div style="font-weight:700;margin-bottom:8px">생산연도별 합계</div>
+        <div class="muted" style="font-size:13px;margin-bottom:10px">면적(HA) 합계와 조림자산(계) 합계</div>
+        <div style="overflow:auto">
+          <table>
+            <thead>
+              <tr><th>생산연도</th><th>면적(HA)</th><th>조림자산(계)</th><th>CPT 수</th></tr>
+            </thead>
+            <tbody id="prodYearStatsBody"></tbody>
+          </table>
+        </div>
+        <div class="muted" style="font-size:13px;margin-top:8px">※ 생산연도는 '생산연도' 컬럼 기준입니다. (≤2025: 생산완료, ≥2026: 생산예정)</div>
+      </div>
+
+
       <div class="card">
         <div style="font-weight:700;margin-bottom:8px">수종별 합계</div>
-        <div class="muted" style="font-size:13px;margin-bottom:10px">면적(HA) 합계와 조림자산(계) 합계</div>
+        <div class="muted" style="font-size:13px;margin-bottom:10px">면적(HA) 합계와 조림자산(계) 합계 (※ 생산완료: 생산연도 ≤ 2025 는 운영 통계에서 제외)</div>
         <div style="overflow:auto">
           <table>
             <thead>

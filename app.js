@@ -1,4 +1,4 @@
-const APP_VERSION = 'v5.0';
+const APP_VERSION = 'v7.0';
 // Field-simple offline-first PWA (read-only)
 const state = {
   list: [],
@@ -17,6 +17,44 @@ function fmt(v){
   if (v === null || v === undefined || v === '') return '-';
   if (typeof v === 'number') return (Math.round(v*100)/100).toLocaleString();
   return String(v);
+}
+
+function fmt0(v){
+  if (v === null || v === undefined || v === '') return '-';
+  const n = (typeof v === 'number') ? v : Number(String(v).replace(/,/g,''));
+  if (isNaN(n)) return '-';
+  return Math.round(n).toLocaleString();
+}
+
+function productionYear(r){
+  // Prefer explicit production-year column if present.
+  const candidates = ['생산연도','생산년도','Production Year','ProductionYear','ProdYear'];
+  for (const k of candidates){
+    if (r && Object.prototype.hasOwnProperty.call(r, k)){
+      const v = r[k];
+      if (v === null || v === undefined || String(v).trim() === '') continue;
+      const n = parseInt(String(v).replace(/[^0-9]/g,''), 10);
+      if (!isNaN(n)) return n;
+    }
+  }
+  // Fallback to buckets (older datasets)
+  const y26 = toNum(r['26생산']);
+  const y25 = toNum(r['25생산']);
+  const y24 = toNum(r['~24생산']);
+  if (y26 > 0) return 2026;
+  if (y25 > 0) return 2025;
+  if (y24 > 0) return 2024;
+  return null;
+}
+
+function isCompleted(r){
+  const py = productionYear(r);
+  return py !== null && py <= 2025;
+}
+
+function activeRows(rows){
+  // exclude completed compartments from operational stats
+  return (rows || []).filter(r => !isCompleted(r));
 }
 
 
@@ -44,7 +82,7 @@ function computeStats(rows, keyField){
 
 function renderStats(){
   // Use detail (1 row per CPT) for totals
-  const rows = state.detail || [];
+  const rows = activeRows(state.detail || []);
   // Year stats
   const years = computeStats(rows, '식재년도')
     .sort((a,b) => (a.key==='미기재') - (b.key==='미기재') || Number(a.key)-Number(b.key));
@@ -52,18 +90,34 @@ function renderStats(){
   if (yBody){
     yBody.innerHTML = '';
     for (const r of years){
-      yBody.insertAdjacentHTML('beforeend', `<tr><td>${r.key}</td><td>${fmt(r.area)}</td><td>${fmt(r.asset)}</td><td>${fmt(r.count)}</td></tr>`);
+      yBody.insertAdjacentHTML('beforeend', `<tr><td>${r.key}</td><td>${fmt(r.area)}</td><td>${fmt0(r.asset)}</td><td>${fmt(r.count)}</td></tr>`);
     }
   }
 
-  // Species stats (top by area)
+  
+  // Production year stats (computed from ~24/25/26 production buckets) - use ALL rows for trend, but show ACTIVE only by default
+  const prodBody = el('prodYearStatsBody');
+  if (prodBody){
+    // show ALL rows' production year distribution (including completed) to understand production history
+    const prodRows = computeStats(rowsAll.map(r => ({...r, '생산연도_derived': productionYear(r) === null ? '미기재/미생산' : String(productionYear(r))})), '생산연도_derived')
+      .sort((a,b) => {
+        const order = (k) => (k==='미기재/미생산') ? 9999 : Number(k);
+        return order(a.key) - order(b.key);
+      });
+    prodBody.innerHTML = '';
+    for (const r of prodRows){
+      prodBody.insertAdjacentHTML('beforeend', `<tr><td>${r.key}</td><td>${fmt(r.area)}</td><td>${fmt0(r.asset)}</td><td>${fmt(r.count)}</td></tr>`);
+    }
+  }
+
+// Species stats (top by area)
   const species = computeStats(rows, 'Species Amended_1')
     .sort((a,b) => b.area - a.area);
   const sBody = el('speciesStatsBody');
   if (sBody){
     sBody.innerHTML = '';
     for (const r of species.slice(0,50)){
-      sBody.insertAdjacentHTML('beforeend', `<tr><td>${r.key}</td><td>${fmt(r.area)}</td><td>${fmt(r.asset)}</td><td>${fmt(r.count)}</td></tr>`);
+      sBody.insertAdjacentHTML('beforeend', `<tr><td>${r.key}</td><td>${fmt(r.area)}</td><td>${fmt0(r.asset)}</td><td>${fmt(r.count)}</td></tr>`);
     }
   }
 }
@@ -131,7 +185,7 @@ function renderQuickSummary(){
   if (state.byCpt.has(q)){
     const d = state.byCpt.get(q);
     const area = fmt(d['HA']);
-    const asset = fmt(d['조림자산 계']);
+    const asset = fmt0(d['조림자산 계']);
     box.textContent = `면적(HA): ${area}  ·  자산(합계): ${asset}`;
     return;
   }
@@ -141,7 +195,7 @@ function renderQuickSummary(){
     const d = state.byCpt.get(cpt);
     if (d){
       const area = fmt(d['HA']);
-      const asset = fmt(d['조림자산 계']);
+      const asset = fmt0(d['조림자산 계']);
       box.textContent = `가장 가까운 CPT: ${cpt}  |  면적(HA): ${area}  ·  자산(합계): ${asset}`;
       return;
     }
@@ -213,7 +267,7 @@ function kvGrid(obj){
     grid.insertAdjacentHTML('beforeend', `
       <div class="kv">
         <div class="k">${label}</div>
-        <div class="v">${fmt(obj[k])}</div>
+        <div class="v">${(k==='조림자산 계')?fmt0(obj[k]):fmt(obj[k])}</div>
       </div>
     `);
   }
@@ -319,14 +373,14 @@ function setupEvents(){
 
 
 function renderHomeSummary(){
-  const rows = state.detail || [];
+  const rows = activeRows(state.detail || []);
   const areaSum = rows.reduce((acc,r)=> acc + toNum(r['HA']), 0);
   const assetSum = rows.reduce((acc,r)=> acc + toNum(r['조림자산 계']), 0);
   const count = rows.length;
 
   const oa = el('overallArea'); if (oa) oa.textContent = fmt(areaSum);
   const oc = el('overallCount'); if (oc) oc.textContent = fmt(count);
-  const os = el('overallAsset'); if (os) os.textContent = fmt(assetSum);
+  const os = el('overallAsset'); if (os) os.textContent = fmt0(assetSum);
 
   const scopeLabel = el('currentScope');
   const scopePill = el('scopePill');
@@ -356,7 +410,7 @@ function renderHomeSummary(){
       const keyEsc = r.key.replace(/"/g,'&quot;');
       body.insertAdjacentHTML('beforeend',
         `<tr class="item" data-region="${keyEsc}" style="cursor:pointer">
-           <td>${r.key}</td><td>${fmt(r.area)}</td><td>${fmt(r.count)}</td><td>${fmt(r.asset)}</td>
+           <td>${r.key}</td><td>${fmt(r.area)}</td><td>${fmt(r.count)}</td><td>${fmt0(r.asset)}</td>
          </tr>`);
     }
     // click handlers (event delegation)

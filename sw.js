@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cpt-quick-v5';
+const CACHE_NAME = 'cpt-quick-v7';
 const ASSETS = [
   './',
   './index.html',
