@@ -17,6 +17,68 @@ function fmt(v){
   return String(v);
 }
 
+
+function toNum(v){
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return v;
+  const n = Number(String(v).replace(/,/g,''));
+  return isNaN(n) ? 0 : n;
+}
+
+function computeStats(rows, keyField){
+  const m = new Map();
+  for (const r of rows){
+    const key = (r[keyField] === null || r[keyField] === undefined || String(r[keyField]).trim()==='') ? '미기재' : String(r[keyField]).trim();
+    if (!m.has(key)){
+      m.set(key, {key, area:0, asset:0, count:0});
+    }
+    const obj = m.get(key);
+    obj.area += toNum(r['HA']);
+    obj.asset += toNum(r['조림자산 계']);
+    obj.count += 1;
+  }
+  return [...m.values()];
+}
+
+function renderStats(){
+  // Use detail (1 row per CPT) for totals
+  const rows = state.detail || [];
+  // Year stats
+  const years = computeStats(rows, '식재년도')
+    .sort((a,b) => (a.key==='미기재') - (b.key==='미기재') || Number(a.key)-Number(b.key));
+  const yBody = el('yearStatsBody');
+  if (yBody){
+    yBody.innerHTML = '';
+    for (const r of years){
+      yBody.insertAdjacentHTML('beforeend', `<tr><td>${r.key}</td><td>${fmt(r.area)}</td><td>${fmt(r.asset)}</td><td>${fmt(r.count)}</td></tr>`);
+    }
+  }
+
+  // Species stats (top by area)
+  const species = computeStats(rows, 'Species Amended_1')
+    .sort((a,b) => b.area - a.area);
+  const sBody = el('speciesStatsBody');
+  if (sBody){
+    sBody.innerHTML = '';
+    for (const r of species.slice(0,50)){
+      sBody.insertAdjacentHTML('beforeend', `<tr><td>${r.key}</td><td>${fmt(r.area)}</td><td>${fmt(r.asset)}</td><td>${fmt(r.count)}</td></tr>`);
+    }
+  }
+}
+
+function showStatsView(){
+  renderStats();
+  el('listView').classList.add('hidden');
+  el('detailView').classList.add('hidden');
+  el('statsView').classList.remove('hidden');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function hideStatsView(){
+  el('statsView').classList.add('hidden');
+  el('listView').classList.remove('hidden');
+}
+
 function loadRecent(){
   try { return JSON.parse(localStorage.getItem('recent_cpt') || '[]'); }
   catch(e){ return []; }
@@ -238,6 +300,8 @@ function setupEvents(){
   el('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') openExactOrFirst(); });
   el('openBtn').addEventListener('click', openExactOrFirst);
   el('clear').addEventListener('click', () => { el('q').value=''; applySearch(); });
+  el('statsBtn').addEventListener('click', showStatsView);
+  el('statsBack').addEventListener('click', hideStatsView);
   el('back').addEventListener('click', backToList);
 }
 

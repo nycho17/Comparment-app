@@ -52,6 +52,7 @@
       <div class="toolbar" style="margin-top:10px">
         <span class="pill" id="pillCount"></span>
         <button id="clear" class="secondary">초기화</button>
+        <button id="statsBtn" class="secondary">통계</button>
         <button id="installBtn" class="secondary hidden">홈화면에 설치</button>
       </div>
     </div>
@@ -96,7 +97,42 @@
       </div>
     </section>
 
-  </main>
+  
+    <section id="statsView" class="hidden">
+      <div class="toolbar" style="margin:10px 0">
+        <button id="statsBack" class="secondary">← 뒤로</button>
+        <span class="pill">요약 통계</span>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:700;margin-bottom:8px">식재연도별 합계</div>
+        <div class="muted" style="font-size:13px;margin-bottom:10px">면적(HA) 합계와 조림자산(계) 합계</div>
+        <div style="overflow:auto">
+          <table>
+            <thead>
+              <tr><th>식재연도</th><th>면적(HA)</th><th>조림자산(계)</th><th>CPT 수</th></tr>
+            </thead>
+            <tbody id="yearStatsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:700;margin-bottom:8px">수종별 합계</div>
+        <div class="muted" style="font-size:13px;margin-bottom:10px">면적(HA) 합계와 조림자산(계) 합계</div>
+        <div style="overflow:auto">
+          <table>
+            <thead>
+              <tr><th>수종</th><th>면적(HA)</th><th>조림자산(계)</th><th>CPT 수</th></tr>
+            </thead>
+            <tbody id="speciesStatsBody"></tbody>
+          </table>
+        </div>
+        <div class="muted" style="font-size:13px;margin-top:8px">※ 표시 제한: 상위 50개 수종만 표시합니다.</div>
+      </div>
+    </section>
+
+</main>
 
   <script src="app.js"></script>
 </body>
