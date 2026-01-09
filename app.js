@@ -1,4 +1,4 @@
-const APP_VERSION = 'v7.0';
+const APP_VERSION = 'v8.0';
 // Field-simple offline-first PWA (read-only)
 const state = {
   list: [],
@@ -358,6 +358,44 @@ function setupInstall(){
     state.deferredPrompt = null;
     el('installBtn').classList.add('hidden');
   });
+}
+
+async function refreshDataFromServer(){
+  const note = el('dataRefreshNote');
+  const btn = el('dataRefreshBtn');
+  try {
+    if (btn) btn.disabled = true;
+    if (note){
+      note.style.display = 'block';
+      note.textContent = '데이터 새로고침 중...';
+    }
+    const ts = Date.now();
+    const [detail, list, segments] = await Promise.all([
+      fetch(`data/comp_detail.json?ts=${ts}`, {cache:'no-store'}).then(r => r.json()),
+      fetch(`data/comp_list.json?ts=${ts}`, {cache:'no-store'}).then(r => r.json()),
+      fetch(`data/segments.json?ts=${ts}`, {cache:'no-store'}).then(r => r.json()).catch(()=>[])
+    ]);
+    state.detail = detail;
+    state.list = list;
+    state.segments = segments || [];
+    // reset scope/filter and rerender
+    if (state.scope) state.scope = {type:'all', value:null};
+    el('q').value = '';
+    renderRecent();
+    renderHomeSummary();
+    applySearch();
+    if (note){
+      note.textContent = `완료: CPT ${fmt(state.detail.length)}개 (서버 최신 반영)`;
+      setTimeout(()=>{ note.style.display='none'; }, 2500);
+    }
+  } catch (e) {
+    if (note){
+      note.style.display = 'block';
+      note.textContent = '실패: 네트워크 또는 서버 응답을 확인하세요.';
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function setupEvents(){
