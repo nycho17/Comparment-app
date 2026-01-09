@@ -1,5 +1,4 @@
-// Simple cache-first service worker
-const CACHE_NAME = 'cpt-pwa-v1';
+const CACHE_NAME = 'cpt-quick-v1';
 const ASSETS = [
   './',
   './index.html',
@@ -38,7 +37,6 @@ self.addEventListener('fetch', (event) => {
       cache.put(event.request, resp.clone());
       return resp;
     } catch (e) {
-      // offline fallback: try index
       const fallback = await caches.match('./index.html');
       return fallback || new Response('Offline', {status: 200, headers:{'Content-Type':'text/plain'}});
     }

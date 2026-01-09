@@ -3,66 +3,76 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Compartment Lookup</title>
+  <title>CPT Quick Lookup</title>
   <link rel="manifest" href="manifest.json"/>
   <meta name="theme-color" content="#0b3d2e"/>
   <style>
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;background:#f6f7f8;color:#111}
     header{background:#0b3d2e;color:#fff;padding:14px 16px;position:sticky;top:0;z-index:10}
     header h1{font-size:18px;margin:0}
-    main{padding:14px 16px;max-width:980px;margin:0 auto}
-    .row{display:flex;gap:10px;flex-wrap:wrap}
-    input,select,button{font-size:16px;padding:10px;border-radius:10px;border:1px solid #d0d5dd;background:#fff}
-    button{background:#111;color:#fff;border:none;padding:10px 12px}
+    header .sub{font-size:12px;opacity:.9;margin-top:4px}
+    main{padding:14px 16px;max-width:860px;margin:0 auto}
+    input,button{font-size:18px;padding:14px 14px;border-radius:14px;border:1px solid #d0d5dd;background:#fff}
+    button{background:#111;color:#fff;border:none}
     button.secondary{background:#fff;color:#111;border:1px solid #d0d5dd}
-    .card{background:#fff;border:1px solid #e7e9ee;border-radius:14px;padding:12px 12px;margin:10px 0;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+    .row{display:flex;gap:10px;align-items:center}
+    .card{background:#fff;border:1px solid #e7e9ee;border-radius:16px;padding:12px 12px;margin:12px 0;box-shadow:0 1px 2px rgba(0,0,0,.04)}
     .muted{color:#667085}
     .pill{display:inline-block;font-size:12px;padding:4px 8px;border-radius:999px;background:#eef2f6;color:#344054;margin-right:6px}
     .list{display:flex;flex-direction:column;gap:8px}
-    .list .item{cursor:pointer}
+    .item{cursor:pointer}
     .item h3{margin:0;font-size:16px}
     .item .meta{margin-top:4px;font-size:13px}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-    .kv{padding:10px;border:1px solid #e7e9ee;border-radius:12px}
+    .kv{padding:10px;border:1px solid #e7e9ee;border-radius:14px}
     .kv .k{font-size:12px;color:#667085;margin-bottom:4px}
-    .kv .v{font-size:15px;font-weight:600}
-    .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
+    .kv .v{font-size:16px;font-weight:700}
+    .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
     .hidden{display:none}
     table{width:100%;border-collapse:collapse}
     th,td{border-bottom:1px solid #eef2f6;padding:8px 6px;text-align:left;font-size:13px}
     th{color:#667085;font-weight:600}
-    .topnote{font-size:12px;color:#667085;margin-top:6px}
+    details summary{cursor:pointer; font-weight:700}
   </style>
 </head>
 <body>
   <header>
-    <h1>Compartment Lookup (조회 전용)</h1>
-    <div class="topnote">기준키: CPT(H열). 앱은 읽기 전용이며 수정/저장은 없습니다.</div>
+    <h1>CPT Quick Lookup</h1>
+    <div class="sub">현장용 초간단 · 조회 전용 · 기준키: CPT(H열)</div>
   </header>
 
   <main>
     <div class="card">
       <div class="row">
-        <input id="q" placeholder="CPT 검색 (예: A01A1)" style="flex:1;min-width:220px"/>
-        <select id="region" style="min-width:140px"><option value="">지역(전체)</option></select>
-        <select id="year" style="min-width:140px"><option value="">식재년도(전체)</option></select>
-        <select id="species" style="min-width:180px"><option value="">수종(전체)</option></select>
-        <button id="clear" class="secondary">초기화</button>
+        <input id="q" placeholder="CPT 입력 (예: A01A1)" autocomplete="off" autocapitalize="characters" style="flex:1;min-width:200px"/>
+        <button id="openBtn">열기</button>
       </div>
       <div class="muted" style="margin-top:10px;font-size:13px" id="stats">데이터 로딩 중...</div>
+      <div id="quickSummary" class="muted" style="margin-top:8px;font-size:14px;font-weight:700"></div>
+      <div class="toolbar" style="margin-top:10px">
+        <span class="pill" id="pillCount"></span>
+        <button id="clear" class="secondary">초기화</button>
+        <button id="installBtn" class="secondary hidden">홈화면에 설치</button>
+      </div>
     </div>
 
     <section id="listView">
-      <div class="toolbar">
-        <span class="pill" id="pillCount"></span>
-        <button id="installBtn" class="secondary hidden">홈화면에 설치</button>
+      <div class="card">
+        <div style="font-weight:700;margin-bottom:8px">최근 조회</div>
+        <div class="list" id="recentList"></div>
+        <div class="muted" style="font-size:13px;margin-top:6px">※ 최근 조회는 이 기기(폰) 안에만 저장됩니다.</div>
       </div>
-      <div class="list" id="list"></div>
+
+      <div class="card">
+        <div style="font-weight:700;margin-bottom:8px">검색 결과</div>
+        <div class="list" id="list"></div>
+        <div class="muted" style="font-size:13px;margin-top:6px">※ 결과가 많으면 CPT를 더 정확히 입력하세요.</div>
+      </div>
     </section>
 
     <section id="detailView" class="hidden">
-      <div class="toolbar">
-        <button id="back" class="secondary">← 목록</button>
+      <div class="toolbar" style="margin:10px 0">
+        <button id="back" class="secondary">← 뒤로</button>
         <span class="pill" id="cptPill"></span>
       </div>
 
@@ -71,14 +81,18 @@
       </div>
 
       <div class="card">
-        <h3 style="margin:0 0 8px 0;font-size:16px">세그먼트(원본 행)</h3>
-        <div class="muted" style="font-size:13px;margin-bottom:10px">같은 CPT가 여러 행으로 분할된 경우가 있어, 아래에서 원본 행을 그대로 확인할 수 있습니다.</div>
-        <div style="overflow:auto">
-          <table id="segTable">
-            <thead><tr id="segHead"></tr></thead>
-            <tbody id="segBody"></tbody>
-          </table>
-        </div>
+        <details>
+          <summary>세그먼트(원본 행) 보기</summary>
+          <div class="muted" style="font-size:13px;margin:10px 0">
+            같은 CPT가 여러 행으로 분할된 경우가 있어 원본 행을 그대로 표시합니다.
+          </div>
+          <div style="overflow:auto">
+            <table id="segTable">
+              <thead><tr id="segHead"></tr></thead>
+              <tbody id="segBody"></tbody>
+            </table>
+          </div>
+        </details>
       </div>
     </section>
 
