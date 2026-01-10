@@ -1,4 +1,4 @@
-const APP_VERSION = 'v8.4';
+const APP_VERSION = 'v8.5';
 // Field-simple offline-first PWA (read-only)
 const state = {
   list: [],
@@ -26,7 +26,7 @@ function fmt0(v){
   return Math.round(n).toLocaleString();
 }
 
-function productionYear(r){
+function _productionYearLegacy(r){
   // Prefer explicit production-year column if present.
   const candidates = ['생산연도','생산년도','Production Year','ProductionYear','ProdYear'];
   for (const k of candidates){
@@ -337,7 +337,7 @@ async function loadData(){
     const saved = loadSavedFilters();
     state.filters = saved ? {...defaultFilters(), ...saved} : defaultFilters();
     populateYearFilters();
-    applyFiltersAndRerender();
+    populateYearFilters();
   state.segments = segments;
 
   state.byCpt = new Map(detail.map(d => [d.CPT, d]));
@@ -390,9 +390,11 @@ async function refreshDataFromServer(){
     const saved = loadSavedFilters();
     state.filters = saved ? {...defaultFilters(), ...saved} : defaultFilters();
     populateYearFilters();
-    applyFiltersAndRerender();
+    populateYearFilters();
     state.list = list;
     state.segments = segments || [];
+        populateYearFilters();
+        applyFiltersAndRerender();
     // reset scope/filter and rerender
     if (state.scope) state.scope = {type:'all', value:null};
     el('q').value = '';
@@ -413,8 +415,6 @@ async function refreshDataFromServer(){
   }
 }
 
-
-
 function uniqSorted(nums){
   const set = new Set();
   for (const n of nums){
@@ -425,125 +425,37 @@ function uniqSorted(nums){
   return Array.from(set).sort((a,b)=>a-b);
 }
 
-const FILTERS_KEY = 'cpt_filters_v1';
-
-function loadSavedFilters(){
-  try{
-    const raw = localStorage.getItem(FILTERS_KEY);
-    if (!raw) return null;
-    const obj = JSON.parse(raw);
-    return obj && typeof obj === 'object' ? obj : null;
-  }catch(e){ return null; }
-}
-
-function saveFilters(){
-  try{
-    localStorage.setItem(FILTERS_KEY, JSON.stringify(state.filters || {}));
-  }catch(e){}
-}
-
-function clearSavedFilters(){
-  try{ localStorage.removeItem(FILTERS_KEY); }catch(e){}
-}
-
-function defaultFilters(){
-  return {
-    prodMode: 'planned',   // planned | all | blank | multi | range
-    prodMulti: [],         // years[]
-    prodFrom: null,
-    prodTo: null,
-    plantMode: 'all',      // all | multi | range
-    plantMulti: [],
-    plantFrom: null,
-    plantTo: null
-  };
-}
-
-function setFiltersUI(){
-  const f = state.filters || defaultFilters();
-  state.filters = f;
-
-  const prodMode = el('prodMode');
-  const plantMode = el('plantMode');
-
-  const prodMulti = el('prodMulti');
-  const plantMulti = el('plantMulti');
-
-  const prodRangeBox = el('prodRangeBox');
-  const plantRangeBox = el('plantRangeBox');
-
-  if (prodMode) prodMode.value = f.prodMode || 'planned';
-  if (plantMode) plantMode.value = f.plantMode || 'all';
-
-  // toggle visibility
-  if (prodMulti) prodMulti.style.display = (f.prodMode === 'multi') ? 'block' : 'none';
-  if (plantMulti) plantMulti.style.display = (f.plantMode === 'multi') ? 'block' : 'none';
-  if (prodRangeBox) prodRangeBox.style.display = (f.prodMode === 'range') ? 'flex' : 'none';
-  if (plantRangeBox) plantRangeBox.style.display = (f.plantMode === 'range') ? 'flex' : 'none';
-
-  // set range inputs
-  const pf = el('prodFrom'), pt = el('prodTo');
-  const lf = el('plantFrom'), lt = el('plantTo');
-  if (pf) pf.value = f.prodFrom ?? '';
-  if (pt) pt.value = f.prodTo ?? '';
-  if (lf) lf.value = f.plantFrom ?? '';
-  if (lt) lt.value = f.plantTo ?? '';
-}
-
 function applyFilters(rowsAll){
-  const f = state.filters || defaultFilters();
+  const f = state.filters || {};
+  const prodSel = f.prodYear;   // null means default planned(>=2026)
+  const plantSel = f.plantYear; // null means no filter
   let rows = rowsAll || [];
 
-  // Production year derived
-  const pyVal = (r) => productionYear(r); // number|null
-
-  // prod filter
-  if (f.prodMode === 'planned'){
+  // Production-year filter
+  if (prodSel === null || prodSel === undefined){
+    // default operational view: planned only
     rows = rows.filter(r => {
-      const py = pyVal(r);
+      const py = productionYear(r);
       return py !== null && py >= 2026;
     });
-  } else if (f.prodMode === 'all'){
-    // no filter
-  } else if (f.prodMode === 'blank'){
-    rows = rows.filter(r => pyVal(r) === null);
-  } else if (f.prodMode === 'multi'){
-    const set = new Set((f.prodMulti||[]).map(x=>parseInt(x,10)).filter(x=>!isNaN(x)));
-    rows = rows.filter(r => set.has(pyVal(r)));
-  } else if (f.prodMode === 'range'){
-    const a = parseInt(f.prodFrom,10);
-    const b = parseInt(f.prodTo,10);
-    if (!isNaN(a) && !isNaN(b)){
-      const lo = Math.min(a,b), hi = Math.max(a,b);
-      rows = rows.filter(r => {
-        const py = pyVal(r);
-        return py !== null && py >= lo && py <= hi;
-      });
-    }
+  } else if (prodSel === 'ALL'){
+    // include all production years (including blank)
+    rows = rows;
+  } else if (prodSel === 'BLANK'){
+    rows = rows.filter(r => productionYear(r) === null);
+  } else {
+    const y = parseInt(prodSel,10);
+    rows = rows.filter(r => productionYear(r) === y);
   }
 
-  // planting year
-  const plantYear = (r) => {
-    const v = r['식재년도'];
-    const n = parseInt(String(v||'').replace(/[^0-9]/g,''),10);
-    return isNaN(n) ? null : n;
-  };
-
-  if (f.plantMode === 'all'){
-    // no filter
-  } else if (f.plantMode === 'multi'){
-    const set = new Set((f.plantMulti||[]).map(x=>parseInt(x,10)).filter(x=>!isNaN(x)));
-    rows = rows.filter(r => set.has(plantYear(r)));
-  } else if (f.plantMode === 'range'){
-    const a = parseInt(f.plantFrom,10);
-    const b = parseInt(f.plantTo,10);
-    if (!isNaN(a) && !isNaN(b)){
-      const lo = Math.min(a,b), hi = Math.max(a,b);
-      rows = rows.filter(r => {
-        const y = plantYear(r);
-        return y !== null && y >= lo && y <= hi;
-      });
-    }
+  // Planting-year filter (exact match)
+  if (plantSel && plantSel !== 'ALL'){
+    const y = parseInt(plantSel,10);
+    rows = rows.filter(r => {
+      const v = r['식재년도'];
+      const n = parseInt(String(v||'').replace(/[^0-9]/g,''),10);
+      return !isNaN(y) && n === y;
+    });
   }
 
   return rows;
@@ -552,52 +464,189 @@ function applyFilters(rowsAll){
 function updateFilterHint(){
   const hint = el('filterHint');
   if (!hint) return;
-  const f = state.filters || defaultFilters();
-
-  let prodText = '생산연도: ';
-  if (f.prodMode === 'planned') prodText += '예정지(≥2026)';
-  else if (f.prodMode === 'all') prodText += '전체';
-  else if (f.prodMode === 'blank') prodText += '미기재';
-  else if (f.prodMode === 'multi') prodText += (f.prodMulti?.length ? f.prodMulti.join(',') : '(선택 없음)');
-  else if (f.prodMode === 'range') prodText += `${f.prodFrom||'?'}~${f.prodTo||'?'}`;
-
-  let plantText = '식재연도: ';
-  if (f.plantMode === 'all') plantText += '전체';
-  else if (f.plantMode === 'multi') plantText += (f.plantMulti?.length ? f.plantMulti.join(',') : '(선택 없음)');
-  else if (f.plantMode === 'range') plantText += `${f.plantFrom||'?'}~${f.plantTo||'?'}`;
-
+  const f = state.filters || {};
+  const prod = f.prodYear;
+  const plant = f.plantYear;
+  const prodText = (prod===null || prod===undefined) ? '생산연도: 예정지(≥2026)' :
+    (prod==='ALL' ? '생산연도: 전체' : (prod==='BLANK' ? '생산연도: 미기재' : `생산연도: ${prod}`));
+  const plantText = (!plant || plant==='ALL') ? '식재연도: 전체' : `식재연도: ${plant}`;
   hint.textContent = `${prodText} · ${plantText}`;
 }
 
 function populateYearFilters(){
   const rowsAll = state.detail || [];
-  state.filters = state.filters || defaultFilters();
+  state.filters = state.filters || {prodYear: null, plantYear: 'ALL'};
 
-  const prodMulti = el('prodMulti');
-  const plantMulti = el('plantMulti');
-  if (!prodMulti || !plantMulti) return;
+  const prodSel = el('prodYearFilter');
+  const plantSel = el('plantYearFilter');
+  if (!prodSel || !plantSel) return;
 
+  // Production years from data (derived)
   const prodYears = uniqSorted(rowsAll.map(r => productionYear(r)).filter(x=>x!==null));
   const plantYears = uniqSorted(rowsAll.map(r => r['식재년도']));
 
-  // fill multi selects
-  const curProd = new Set((state.filters.prodMulti||[]).map(String));
-  prodMulti.innerHTML = '';
+  // Build production options
+  const currentProd = state.filters.prodYear;
+  prodSel.innerHTML = '';
+  // Default planned view
+  prodSel.insertAdjacentHTML('beforeend', `<option value="" ${currentProd===null || currentProd===undefined ? 'selected':''}>예정지(생산연도 ≥ 2026) [기본]</option>`);
+  prodSel.insertAdjacentHTML('beforeend', `<option value="ALL" ${currentProd==='ALL' ? 'selected':''}>전체(완료+예정)</option>`);
+  prodSel.insertAdjacentHTML('beforeend', `<option value="BLANK" ${currentProd==='BLANK' ? 'selected':''}>생산연도 미기재</option>`);
   for (const y of prodYears){
     const val = String(y);
-    const sel = curProd.has(val) ? 'selected' : '';
-    prodMulti.insertAdjacentHTML('beforeend', `<option value="${val}" ${sel}>${val}</option>`);
+    const sel = (String(currentProd)===val) ? 'selected' : '';
+    prodSel.insertAdjacentHTML('beforeend', `<option value="${val}" ${sel}>${val}</option>`);
   }
 
-  const curPlant = new Set((state.filters.plantMulti||[]).map(String));
-  plantMulti.innerHTML = '';
+  // Planting options
+  const currentPlant = state.filters.plantYear || 'ALL';
+  plantSel.innerHTML = '';
+  plantSel.insertAdjacentHTML('beforeend', `<option value="ALL" ${currentPlant==='ALL'?'selected':''}>전체</option>`);
   for (const y of plantYears){
     const val = String(y);
-    const sel = curPlant.has(val) ? 'selected' : '';
-    plantMulti.insertAdjacentHTML('beforeend', `<option value="${val}" ${sel}>${val}</option>`);
+    const sel = (String(currentPlant)===val) ? 'selected' : '';
+    plantSel.insertAdjacentHTML('beforeend', `<option value="${val}" ${sel}>${val}</option>`);
   }
 
-  setFiltersUI();
+  updateFilterHint();
+}
+
+function applyFiltersAndRerender(){
+  // Re-render summary + current list view with filters applied
+  renderHomeSummary();
+  applySearch();
+  updateFilterHint();
+}
+
+/* ---- Year Filters (Operational) ---- */
+const FILTERS_KEY = 'cpt_filters_simple_v1';
+
+function loadSavedFilters(){
+  try{
+    const raw = localStorage.getItem(FILTERS_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){ return null; }
+}
+function saveFilters(){
+  try{ localStorage.setItem(FILTERS_KEY, JSON.stringify(state.filters||{})); }catch(e){}
+}
+function clearSavedFilters(){
+  try{ localStorage.removeItem(FILTERS_KEY); }catch(e){}
+}
+
+function defaultFilters(){
+  // prod: 'PLANNED' (>=2026) | 'ALL' | 'BLANK' | 'YYYY'
+  // plant: 'ALL' | 'YYYY'
+  return { prod:'PLANNED', plant:'ALL' };
+}
+
+function parseYear(v){
+  if(v===null || v===undefined) return null;
+  const n = parseInt(String(v).replace(/[^0-9]/g,''), 10);
+  return isNaN(n) ? null : n;
+}
+
+function productionYear(row){
+  // Prefer explicit 생산연도 column if present; else fallback to existing productionYear() if defined elsewhere
+  // In this codebase, 생산연도 is already computed in other functions; keep compatible:
+  const keys = ['생산연도','ProductionYear','ProdYear','생산년도','생산 년도'];
+  for(const k of keys){
+    if(row && row[k] !== undefined && row[k] !== null && String(row[k]).trim()!==''){
+      const y = parseYear(row[k]);
+      if(y) return y;
+    }
+  }
+  // If older helper exists, try it
+  try{
+    if(typeof window !== 'undefined' && typeof window._productionYearLegacy === 'function'){
+      return window._productionYearLegacy(row);
+    }
+  }catch(e){}
+  // 마지막: detail에 '생산연도'가 없으면 null
+  return null;
+}
+
+function applyFilters(rowsAll){
+  const f = state.filters || defaultFilters();
+  let rows = rowsAll || [];
+
+  // prod filter
+  if(f.prod === 'PLANNED'){
+    rows = rows.filter(r => {
+      const y = productionYear(r);
+      return y !== null && y >= 2026;
+    });
+  } else if(f.prod === 'ALL'){
+    // no filter
+  } else if(f.prod === 'BLANK'){
+    rows = rows.filter(r => productionYear(r) === null);
+  } else {
+    const y = parseInt(f.prod, 10);
+    rows = rows.filter(r => productionYear(r) === y);
+  }
+
+  // plant filter (식재년도)
+  if(f.plant && f.plant !== 'ALL'){
+    const y = parseInt(f.plant, 10);
+    rows = rows.filter(r => parseYear(r['식재년도']) === y);
+  }
+  return rows;
+}
+
+function updateFilterHint(){
+  const hint = el('filterHint');
+  if(!hint) return;
+  const f = state.filters || defaultFilters();
+  const prodText = (f.prod==='PLANNED') ? '생산연도: 예정지(≥2026)' :
+                   (f.prod==='ALL') ? '생산연도: 전체' :
+                   (f.prod==='BLANK') ? '생산연도: 미기재' : `생산연도: ${f.prod}`;
+  const plantText = (!f.plant || f.plant==='ALL') ? '식재연도: 전체' : `식재연도: ${f.plant}`;
+  hint.textContent = `${prodText} · ${plantText}`;
+}
+
+function uniqSortedYears(arr){
+  const set = new Set();
+  for(const v of arr){
+    const y = parseYear(v);
+    if(y) set.add(y);
+  }
+  return Array.from(set).sort((a,b)=>a-b);
+}
+
+function populateYearFilters(){
+  const prodSel = el('prodYearFilter');
+  const plantSel = el('plantYearFilter');
+  if(!prodSel || !plantSel) return;
+
+  const rowsAll = state.detail || [];
+  const prodYears = uniqSortedYears(rowsAll.map(r => productionYear(r)));
+  const plantYears = uniqSortedYears(rowsAll.map(r => r['식재년도']));
+
+  // current
+  state.filters = state.filters || defaultFilters();
+  const f = state.filters;
+
+  // prod options
+  prodSel.innerHTML = '';
+  prodSel.insertAdjacentHTML('beforeend', `<option value="PLANNED" ${f.prod==='PLANNED'?'selected':''}>예정지(≥2026) [기본]</option>`);
+  prodSel.insertAdjacentHTML('beforeend', `<option value="ALL" ${f.prod==='ALL'?'selected':''}>전체(완료+예정)</option>`);
+  prodSel.insertAdjacentHTML('beforeend', `<option value="BLANK" ${f.prod==='BLANK'?'selected':''}>미기재</option>`);
+  for(const y of prodYears){
+    const val = String(y);
+    const sel = (String(f.prod)===val) ? 'selected' : '';
+    prodSel.insertAdjacentHTML('beforeend', `<option value="${val}" ${sel}>${val}</option>`);
+  }
+
+  // plant options
+  plantSel.innerHTML = '';
+  plantSel.insertAdjacentHTML('beforeend', `<option value="ALL" ${(!f.plant || f.plant==='ALL')?'selected':''}>전체 [기본]</option>`);
+  for(const y of plantYears){
+    const val = String(y);
+    const sel = (String(f.plant)===val) ? 'selected' : '';
+    plantSel.insertAdjacentHTML('beforeend', `<option value="${val}" ${sel}>${val}</option>`);
+  }
+
   updateFilterHint();
 }
 
@@ -607,65 +656,9 @@ function applyFiltersAndRerender(){
   updateFilterHint();
   saveFilters();
 }
+/* ---- /Year Filters ---- */
 
 function setupEvents(){
-// Filters (persisted)
-try{
-  const saved = loadSavedFilters();
-  state.filters = saved ? {...defaultFilters(), ...saved} : defaultFilters();
-}catch(e){
-  state.filters = defaultFilters();
-}
-
-const prodMode = el('prodMode');
-const plantMode = el('plantMode');
-const prodMulti = el('prodMulti');
-const plantMulti = el('plantMulti');
-
-function onModeChange(){
-  const f = state.filters || defaultFilters();
-  if (prodMode) f.prodMode = prodMode.value || 'planned';
-  if (plantMode) f.plantMode = plantMode.value || 'all';
-  state.filters = f;
-  setFiltersUI();
-  applyFiltersAndRerender();
-}
-
-function onMultiChange(){
-  const f = state.filters || defaultFilters();
-  if (prodMulti){
-    f.prodMulti = Array.from(prodMulti.selectedOptions).map(o=>o.value);
-  }
-  if (plantMulti){
-    f.plantMulti = Array.from(plantMulti.selectedOptions).map(o=>o.value);
-  }
-  state.filters = f;
-  applyFiltersAndRerender();
-}
-
-function onRangeChange(){
-  const f = state.filters || defaultFilters();
-  const pf = el('prodFrom'), pt = el('prodTo');
-  const lf = el('plantFrom'), lt = el('plantTo');
-  if (pf) f.prodFrom = pf.value ? parseInt(pf.value,10) : null;
-  if (pt) f.prodTo = pt.value ? parseInt(pt.value,10) : null;
-  if (lf) f.plantFrom = lf.value ? parseInt(lf.value,10) : null;
-  if (lt) f.plantTo = lt.value ? parseInt(lt.value,10) : null;
-  state.filters = f;
-  applyFiltersAndRerender();
-}
-
-if (prodMode) prodMode.addEventListener('change', onModeChange);
-if (plantMode) plantMode.addEventListener('change', onModeChange);
-if (prodMulti) prodMulti.addEventListener('change', onMultiChange);
-if (plantMulti) plantMulti.addEventListener('change', onMultiChange);
-
-const pf = el('prodFrom'), pt = el('prodTo'), lf = el('plantFrom'), lt = el('plantTo');
-if (pf) pf.addEventListener('input', onRangeChange);
-if (pt) pt.addEventListener('input', onRangeChange);
-if (lf) lf.addEventListener('input', onRangeChange);
-if (lt) lt.addEventListener('input', onRangeChange);
-
   const q = el('q');
   const openBtn = el('open');
   const clearBtn = el('clear');
@@ -729,3 +722,5 @@ if (lt) lt.addEventListener('input', onRangeChange);
 }
 
 
+
+try{ window._productionYearLegacy = _productionYearLegacy; }catch(e){}
