@@ -1,4 +1,4 @@
-const APP_VERSION = 'v8.0';
+const APP_VERSION = 'v8.2';
 // Field-simple offline-first PWA (read-only)
 const state = {
   list: [],
@@ -53,11 +53,12 @@ function isCompleted(r){
 }
 
 function activeRows(rows){
-  // exclude completed compartments from operational stats
-  return (rows || []).filter(r => !isCompleted(r));
+  // Operational stats scope: production planned only (production year >= 2026)
+  return (rows || []).filter(r => {
+    const py = productionYear(r);
+    return py !== null && py >= 2026;
+  });
 }
-
-
 function toNum(v){
   if (v === null || v === undefined || v === '') return 0;
   if (typeof v === 'number') return v;
@@ -204,6 +205,9 @@ function renderQuickSummary(){
 }
 
 function applySearch(){
+  const baseDetail = applyFilters(state.detail || []);
+  const allowed = new Set(baseDetail.map(r=>r['CPT']));
+
   const q = el('q').value.trim().toUpperCase();
 
   // base set (optionally scoped)
@@ -330,6 +334,7 @@ async function loadData(){
   ]);
   state.list = list;
   state.detail = detail;
+    populateYearFilters();
   state.segments = segments;
 
   state.byCpt = new Map(detail.map(d => [d.CPT, d]));
@@ -376,6 +381,7 @@ async function refreshDataFromServer(){
       fetch(`data/segments.json?ts=${ts}`, {cache:'no-store'}).then(r => r.json()).catch(()=>[])
     ]);
     state.detail = detail;
+    populateYearFilters();
     state.list = list;
     state.segments = segments || [];
     // reset scope/filter and rerender
@@ -396,6 +402,109 @@ async function refreshDataFromServer(){
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+function uniqSorted(nums){
+  const set = new Set();
+  for (const n of nums){
+    if (n === null || n === undefined) continue;
+    const x = parseInt(n,10);
+    if (!isNaN(x)) set.add(x);
+  }
+  return Array.from(set).sort((a,b)=>a-b);
+}
+
+function applyFilters(rowsAll){
+  const f = state.filters || {};
+  const prodSel = f.prodYear;   // null means default planned(>=2026)
+  const plantSel = f.plantYear; // null means no filter
+  let rows = rowsAll || [];
+
+  // Production-year filter
+  if (prodSel === null || prodSel === undefined){
+    // default operational view: planned only
+    rows = rows.filter(r => {
+      const py = productionYear(r);
+      return py !== null && py >= 2026;
+    });
+  } else if (prodSel === 'ALL'){
+    // include all production years (including blank)
+    rows = rows;
+  } else if (prodSel === 'BLANK'){
+    rows = rows.filter(r => productionYear(r) === null);
+  } else {
+    const y = parseInt(prodSel,10);
+    rows = rows.filter(r => productionYear(r) === y);
+  }
+
+  // Planting-year filter (exact match)
+  if (plantSel && plantSel !== 'ALL'){
+    const y = parseInt(plantSel,10);
+    rows = rows.filter(r => {
+      const v = r['식재년도'];
+      const n = parseInt(String(v||'').replace(/[^0-9]/g,''),10);
+      return !isNaN(y) && n === y;
+    });
+  }
+
+  return rows;
+}
+
+function updateFilterHint(){
+  const hint = el('filterHint');
+  if (!hint) return;
+  const f = state.filters || {};
+  const prod = f.prodYear;
+  const plant = f.plantYear;
+  const prodText = (prod===null || prod===undefined) ? '생산연도: 예정지(≥2026)' :
+    (prod==='ALL' ? '생산연도: 전체' : (prod==='BLANK' ? '생산연도: 미기재' : `생산연도: ${prod}`));
+  const plantText = (!plant || plant==='ALL') ? '식재연도: 전체' : `식재연도: ${plant}`;
+  hint.textContent = `${prodText} · ${plantText}`;
+}
+
+function populateYearFilters(){
+  const rowsAll = state.detail || [];
+  state.filters = state.filters || {prodYear: null, plantYear: 'ALL'};
+
+  const prodSel = el('prodYearFilter');
+  const plantSel = el('plantYearFilter');
+  if (!prodSel || !plantSel) return;
+
+  // Production years from data (derived)
+  const prodYears = uniqSorted(rowsAll.map(r => productionYear(r)).filter(x=>x!==null));
+  const plantYears = uniqSorted(rowsAll.map(r => r['식재년도']));
+
+  // Build production options
+  const currentProd = state.filters.prodYear;
+  prodSel.innerHTML = '';
+  // Default planned view
+  prodSel.insertAdjacentHTML('beforeend', `<option value="" ${currentProd===null || currentProd===undefined ? 'selected':''}>예정지(생산연도 ≥ 2026) [기본]</option>`);
+  prodSel.insertAdjacentHTML('beforeend', `<option value="ALL" ${currentProd==='ALL' ? 'selected':''}>전체(완료+예정)</option>`);
+  prodSel.insertAdjacentHTML('beforeend', `<option value="BLANK" ${currentProd==='BLANK' ? 'selected':''}>생산연도 미기재</option>`);
+  for (const y of prodYears){
+    const val = String(y);
+    const sel = (String(currentProd)===val) ? 'selected' : '';
+    prodSel.insertAdjacentHTML('beforeend', `<option value="${val}" ${sel}>${val}</option>`);
+  }
+
+  // Planting options
+  const currentPlant = state.filters.plantYear || 'ALL';
+  plantSel.innerHTML = '';
+  plantSel.insertAdjacentHTML('beforeend', `<option value="ALL" ${currentPlant==='ALL'?'selected':''}>전체</option>`);
+  for (const y of plantYears){
+    const val = String(y);
+    const sel = (String(currentPlant)===val) ? 'selected' : '';
+    plantSel.insertAdjacentHTML('beforeend', `<option value="${val}" ${sel}>${val}</option>`);
+  }
+
+  updateFilterHint();
+}
+
+function applyFiltersAndRerender(){
+  // Re-render summary + current list view with filters applied
+  renderHomeSummary();
+  applySearch();
+  updateFilterHint();
 }
 
 function setupEvents(){

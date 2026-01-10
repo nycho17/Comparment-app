@@ -38,7 +38,7 @@
 <body>
   <header>
     <h1>CPT Quick Lookup</h1>
-    <div class="sub">현장용 초간단 · 조회 전용 · 기준키: CPT(H열) · v8.0</div>
+    <div class="sub">현장용 초간단 · 조회 전용 · 기준키: CPT(H열) · v8.2</div>
   </header>
 
   <main>
@@ -54,6 +54,19 @@
         <button id="clear" class="secondary">초기화</button>
   <button id="dataRefreshBtn" class="secondary">데이터 새로고침</button>
         <button id="statsBtn" class="secondary">통계</button>
+
+      <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:10px">
+        <div style="display:flex;flex-direction:column;gap:6px;min-width:180px">
+          <div class="muted" style="font-size:12px">생산연도 필터</div>
+          <select id="prodYearFilter" class="input"></select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;min-width:180px">
+          <div class="muted" style="font-size:12px">식재연도 필터</div>
+          <select id="plantYearFilter" class="input"></select>
+        </div>
+        <div class="muted" style="font-size:12px;align-self:flex-end" id="filterHint"></div>
+      </div>
+
         <button id="installBtn" class="secondary hidden">홈화면에 설치</button>
       </div>
     </div>
@@ -159,7 +172,7 @@
 
       <div class="card">
         <div style="font-weight:700;margin-bottom:8px">식재연도별 합계</div>
-        <div class="muted" style="font-size:13px;margin-bottom:10px">면적(HA) 합계와 조림자산(계) 합계 (※ 생산완료: 생산연도 ≤ 2025 는 운영 통계에서 제외)</div>
+        <div class="muted" style="font-size:13px;margin-bottom:10px">면적(HA) 합계와 조림자산(계) 합계 (※ 운영 통계는 생산연도 ≥ 2026 (생산 예정지)만 포함합니다.)</div>
         <div style="overflow:auto">
           <table>
             <thead>
@@ -182,13 +195,13 @@
             <tbody id="prodYearStatsBody"></tbody>
           </table>
         </div>
-        <div class="muted" style="font-size:13px;margin-top:8px">※ 생산연도는 '생산연도' 컬럼 기준입니다. (≤2025: 생산완료, ≥2026: 생산예정)</div>
+        <div class="muted" style="font-size:13px;margin-top:8px">※ 생산연도는 '생산연도' 컬럼 기준입니다. (운영 통계: ≥2026만 포함)</div>
       </div>
 
 
       <div class="card">
         <div style="font-weight:700;margin-bottom:8px">수종별 합계</div>
-        <div class="muted" style="font-size:13px;margin-bottom:10px">면적(HA) 합계와 조림자산(계) 합계 (※ 생산완료: 생산연도 ≤ 2025 는 운영 통계에서 제외)</div>
+        <div class="muted" style="font-size:13px;margin-bottom:10px">면적(HA) 합계와 조림자산(계) 합계 (※ 운영 통계는 생산연도 ≥ 2026 (생산 예정지)만 포함합니다.)</div>
         <div style="overflow:auto">
           <table>
             <thead>
