@@ -1,4 +1,4 @@
-const APP_VERSION = 'v8.5';
+const APP_VERSION = 'v8.5.1';
 // Field-simple offline-first PWA (read-only)
 const state = {
   list: [],
@@ -326,7 +326,7 @@ function openExactOrFirst(){
   if (state.filtered.length) openDetail(state.filtered[0].CPT);
 }
 
-async function loadData(){
+async async function loadData(){
   const [list, detail, segments] = await Promise.all([
     fetch('data/comp_list.json').then(r=>r.json()),
     fetch('data/comp_detail.json').then(r=>r.json()),
@@ -336,7 +336,6 @@ async function loadData(){
   state.detail = detail;
     const saved = loadSavedFilters();
     state.filters = saved ? {...defaultFilters(), ...saved} : defaultFilters();
-    populateYearFilters();
     populateYearFilters();
   state.segments = segments;
 
@@ -350,7 +349,7 @@ async function loadData(){
 
   el('stats').textContent = `CPT ${state.list.length.toLocaleString()}개 로드 완료 (조회 전용)`;
   renderRecent();
-  applySearch();
+  applyFiltersAndRerender();
 }
 
 function setupInstall(){
