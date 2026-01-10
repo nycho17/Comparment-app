@@ -33,12 +33,14 @@
     th,td{border-bottom:1px solid #eef2f6;padding:8px 6px;text-align:left;font-size:13px}
     th{color:#667085;font-weight:600}
     details summary{cursor:pointer; font-weight:700}
-  </style>
+  
+select{padding:10px 12px;border:1px solid #d0d7de;border-radius:12px;font-size:14px;min-height:42px;background:#fff;}
+</style>
 </head>
 <body>
   <header>
     <h1>CPT Quick Lookup</h1>
-    <div class="sub">현장용 초간단 · 조회 전용 · 기준키: CPT(H열) · v8.2</div>
+    <div class="sub">현장용 초간단 · 조회 전용 · 기준키: CPT(H열) · v8.4</div>
   </header>
 
   <main>
@@ -55,17 +57,45 @@
   <button id="dataRefreshBtn" class="secondary">데이터 새로고침</button>
         <button id="statsBtn" class="secondary">통계</button>
 
-      <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:10px">
-        <div style="display:flex;flex-direction:column;gap:6px;min-width:180px">
-          <div class="muted" style="font-size:12px">생산연도 필터</div>
-          <select id="prodYearFilter" class="input"></select>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px;min-width:180px">
-          <div class="muted" style="font-size:12px">식재연도 필터</div>
-          <select id="plantYearFilter" class="input"></select>
-        </div>
-        <div class="muted" style="font-size:12px;align-self:flex-end" id="filterHint"></div>
+      <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:10px">
+  <div style="display:flex;flex-direction:column;gap:6px;min-width:260px">
+    <div class="muted" style="font-size:12px">생산연도 필터</div>
+    <div class="row" style="gap:8px;flex-wrap:wrap">
+      <select id="prodMode" class="input" style="min-width:160px">
+        <option value="planned">예정지(≥2026) [기본]</option>
+        <option value="all">전체(완료+예정)</option>
+        <option value="blank">미기재</option>
+        <option value="multi">다중 선택</option>
+        <option value="range">범위</option>
+      </select>
+      <select id="prodMulti" class="input" multiple size="4" style="min-width:160px;display:none"></select>
+      <div id="prodRangeBox" class="row" style="gap:6px;display:none">
+        <input id="prodFrom" class="input" type="number" placeholder="From" style="width:90px">
+        <span class="muted" style="align-self:center">~</span>
+        <input id="prodTo" class="input" type="number" placeholder="To" style="width:90px">
       </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:6px;min-width:260px">
+    <div class="muted" style="font-size:12px">식재연도 필터</div>
+    <div class="row" style="gap:8px;flex-wrap:wrap">
+      <select id="plantMode" class="input" style="min-width:160px">
+        <option value="all">전체 [기본]</option>
+        <option value="multi">다중 선택</option>
+        <option value="range">범위</option>
+      </select>
+      <select id="plantMulti" class="input" multiple size="4" style="min-width:160px;display:none"></select>
+      <div id="plantRangeBox" class="row" style="gap:6px;display:none">
+        <input id="plantFrom" class="input" type="number" placeholder="From" style="width:90px">
+        <span class="muted" style="align-self:center">~</span>
+        <input id="plantTo" class="input" type="number" placeholder="To" style="width:90px">
+      </div>
+    </div>
+  </div>
+
+  <div class="muted" style="font-size:12px;align-self:flex-end" id="filterHint"></div>
+</div>
 
         <button id="installBtn" class="secondary hidden">홈화면에 설치</button>
       </div>

@@ -1,4 +1,4 @@
-const APP_VERSION = 'v8.2';
+const APP_VERSION = 'v8.4';
 // Field-simple offline-first PWA (read-only)
 const state = {
   list: [],
@@ -211,7 +211,7 @@ function applySearch(){
   const q = el('q').value.trim().toUpperCase();
 
   // base set (optionally scoped)
-  let base = state.list;
+  let base = (state.list || []).filter(r => allowed.has(r['CPT']));
   if (state.scope && state.scope.type === 'region' && state.scope.value){
     base = base.filter(r => String(r['지역'] || '').trim() === state.scope.value);
   }
@@ -334,7 +334,10 @@ async function loadData(){
   ]);
   state.list = list;
   state.detail = detail;
+    const saved = loadSavedFilters();
+    state.filters = saved ? {...defaultFilters(), ...saved} : defaultFilters();
     populateYearFilters();
+    applyFiltersAndRerender();
   state.segments = segments;
 
   state.byCpt = new Map(detail.map(d => [d.CPT, d]));
@@ -366,6 +369,9 @@ function setupInstall(){
 }
 
 async function refreshDataFromServer(){
+  clearSavedFilters();
+  state.filters = defaultFilters();
+
   const note = el('dataRefreshNote');
   const btn = el('dataRefreshBtn');
   try {
@@ -381,7 +387,10 @@ async function refreshDataFromServer(){
       fetch(`data/segments.json?ts=${ts}`, {cache:'no-store'}).then(r => r.json()).catch(()=>[])
     ]);
     state.detail = detail;
+    const saved = loadSavedFilters();
+    state.filters = saved ? {...defaultFilters(), ...saved} : defaultFilters();
     populateYearFilters();
+    applyFiltersAndRerender();
     state.list = list;
     state.segments = segments || [];
     // reset scope/filter and rerender
@@ -404,6 +413,8 @@ async function refreshDataFromServer(){
   }
 }
 
+
+
 function uniqSorted(nums){
   const set = new Set();
   for (const n of nums){
@@ -414,37 +425,125 @@ function uniqSorted(nums){
   return Array.from(set).sort((a,b)=>a-b);
 }
 
+const FILTERS_KEY = 'cpt_filters_v1';
+
+function loadSavedFilters(){
+  try{
+    const raw = localStorage.getItem(FILTERS_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    return obj && typeof obj === 'object' ? obj : null;
+  }catch(e){ return null; }
+}
+
+function saveFilters(){
+  try{
+    localStorage.setItem(FILTERS_KEY, JSON.stringify(state.filters || {}));
+  }catch(e){}
+}
+
+function clearSavedFilters(){
+  try{ localStorage.removeItem(FILTERS_KEY); }catch(e){}
+}
+
+function defaultFilters(){
+  return {
+    prodMode: 'planned',   // planned | all | blank | multi | range
+    prodMulti: [],         // years[]
+    prodFrom: null,
+    prodTo: null,
+    plantMode: 'all',      // all | multi | range
+    plantMulti: [],
+    plantFrom: null,
+    plantTo: null
+  };
+}
+
+function setFiltersUI(){
+  const f = state.filters || defaultFilters();
+  state.filters = f;
+
+  const prodMode = el('prodMode');
+  const plantMode = el('plantMode');
+
+  const prodMulti = el('prodMulti');
+  const plantMulti = el('plantMulti');
+
+  const prodRangeBox = el('prodRangeBox');
+  const plantRangeBox = el('plantRangeBox');
+
+  if (prodMode) prodMode.value = f.prodMode || 'planned';
+  if (plantMode) plantMode.value = f.plantMode || 'all';
+
+  // toggle visibility
+  if (prodMulti) prodMulti.style.display = (f.prodMode === 'multi') ? 'block' : 'none';
+  if (plantMulti) plantMulti.style.display = (f.plantMode === 'multi') ? 'block' : 'none';
+  if (prodRangeBox) prodRangeBox.style.display = (f.prodMode === 'range') ? 'flex' : 'none';
+  if (plantRangeBox) plantRangeBox.style.display = (f.plantMode === 'range') ? 'flex' : 'none';
+
+  // set range inputs
+  const pf = el('prodFrom'), pt = el('prodTo');
+  const lf = el('plantFrom'), lt = el('plantTo');
+  if (pf) pf.value = f.prodFrom ?? '';
+  if (pt) pt.value = f.prodTo ?? '';
+  if (lf) lf.value = f.plantFrom ?? '';
+  if (lt) lt.value = f.plantTo ?? '';
+}
+
 function applyFilters(rowsAll){
-  const f = state.filters || {};
-  const prodSel = f.prodYear;   // null means default planned(>=2026)
-  const plantSel = f.plantYear; // null means no filter
+  const f = state.filters || defaultFilters();
   let rows = rowsAll || [];
 
-  // Production-year filter
-  if (prodSel === null || prodSel === undefined){
-    // default operational view: planned only
+  // Production year derived
+  const pyVal = (r) => productionYear(r); // number|null
+
+  // prod filter
+  if (f.prodMode === 'planned'){
     rows = rows.filter(r => {
-      const py = productionYear(r);
+      const py = pyVal(r);
       return py !== null && py >= 2026;
     });
-  } else if (prodSel === 'ALL'){
-    // include all production years (including blank)
-    rows = rows;
-  } else if (prodSel === 'BLANK'){
-    rows = rows.filter(r => productionYear(r) === null);
-  } else {
-    const y = parseInt(prodSel,10);
-    rows = rows.filter(r => productionYear(r) === y);
+  } else if (f.prodMode === 'all'){
+    // no filter
+  } else if (f.prodMode === 'blank'){
+    rows = rows.filter(r => pyVal(r) === null);
+  } else if (f.prodMode === 'multi'){
+    const set = new Set((f.prodMulti||[]).map(x=>parseInt(x,10)).filter(x=>!isNaN(x)));
+    rows = rows.filter(r => set.has(pyVal(r)));
+  } else if (f.prodMode === 'range'){
+    const a = parseInt(f.prodFrom,10);
+    const b = parseInt(f.prodTo,10);
+    if (!isNaN(a) && !isNaN(b)){
+      const lo = Math.min(a,b), hi = Math.max(a,b);
+      rows = rows.filter(r => {
+        const py = pyVal(r);
+        return py !== null && py >= lo && py <= hi;
+      });
+    }
   }
 
-  // Planting-year filter (exact match)
-  if (plantSel && plantSel !== 'ALL'){
-    const y = parseInt(plantSel,10);
-    rows = rows.filter(r => {
-      const v = r['식재년도'];
-      const n = parseInt(String(v||'').replace(/[^0-9]/g,''),10);
-      return !isNaN(y) && n === y;
-    });
+  // planting year
+  const plantYear = (r) => {
+    const v = r['식재년도'];
+    const n = parseInt(String(v||'').replace(/[^0-9]/g,''),10);
+    return isNaN(n) ? null : n;
+  };
+
+  if (f.plantMode === 'all'){
+    // no filter
+  } else if (f.plantMode === 'multi'){
+    const set = new Set((f.plantMulti||[]).map(x=>parseInt(x,10)).filter(x=>!isNaN(x)));
+    rows = rows.filter(r => set.has(plantYear(r)));
+  } else if (f.plantMode === 'range'){
+    const a = parseInt(f.plantFrom,10);
+    const b = parseInt(f.plantTo,10);
+    if (!isNaN(a) && !isNaN(b)){
+      const lo = Math.min(a,b), hi = Math.max(a,b);
+      rows = rows.filter(r => {
+        const y = plantYear(r);
+        return y !== null && y >= lo && y <= hi;
+      });
+    }
   }
 
   return rows;
@@ -453,201 +552,180 @@ function applyFilters(rowsAll){
 function updateFilterHint(){
   const hint = el('filterHint');
   if (!hint) return;
-  const f = state.filters || {};
-  const prod = f.prodYear;
-  const plant = f.plantYear;
-  const prodText = (prod===null || prod===undefined) ? '생산연도: 예정지(≥2026)' :
-    (prod==='ALL' ? '생산연도: 전체' : (prod==='BLANK' ? '생산연도: 미기재' : `생산연도: ${prod}`));
-  const plantText = (!plant || plant==='ALL') ? '식재연도: 전체' : `식재연도: ${plant}`;
+  const f = state.filters || defaultFilters();
+
+  let prodText = '생산연도: ';
+  if (f.prodMode === 'planned') prodText += '예정지(≥2026)';
+  else if (f.prodMode === 'all') prodText += '전체';
+  else if (f.prodMode === 'blank') prodText += '미기재';
+  else if (f.prodMode === 'multi') prodText += (f.prodMulti?.length ? f.prodMulti.join(',') : '(선택 없음)');
+  else if (f.prodMode === 'range') prodText += `${f.prodFrom||'?'}~${f.prodTo||'?'}`;
+
+  let plantText = '식재연도: ';
+  if (f.plantMode === 'all') plantText += '전체';
+  else if (f.plantMode === 'multi') plantText += (f.plantMulti?.length ? f.plantMulti.join(',') : '(선택 없음)');
+  else if (f.plantMode === 'range') plantText += `${f.plantFrom||'?'}~${f.plantTo||'?'}`;
+
   hint.textContent = `${prodText} · ${plantText}`;
 }
 
 function populateYearFilters(){
   const rowsAll = state.detail || [];
-  state.filters = state.filters || {prodYear: null, plantYear: 'ALL'};
+  state.filters = state.filters || defaultFilters();
 
-  const prodSel = el('prodYearFilter');
-  const plantSel = el('plantYearFilter');
-  if (!prodSel || !plantSel) return;
+  const prodMulti = el('prodMulti');
+  const plantMulti = el('plantMulti');
+  if (!prodMulti || !plantMulti) return;
 
-  // Production years from data (derived)
   const prodYears = uniqSorted(rowsAll.map(r => productionYear(r)).filter(x=>x!==null));
   const plantYears = uniqSorted(rowsAll.map(r => r['식재년도']));
 
-  // Build production options
-  const currentProd = state.filters.prodYear;
-  prodSel.innerHTML = '';
-  // Default planned view
-  prodSel.insertAdjacentHTML('beforeend', `<option value="" ${currentProd===null || currentProd===undefined ? 'selected':''}>예정지(생산연도 ≥ 2026) [기본]</option>`);
-  prodSel.insertAdjacentHTML('beforeend', `<option value="ALL" ${currentProd==='ALL' ? 'selected':''}>전체(완료+예정)</option>`);
-  prodSel.insertAdjacentHTML('beforeend', `<option value="BLANK" ${currentProd==='BLANK' ? 'selected':''}>생산연도 미기재</option>`);
+  // fill multi selects
+  const curProd = new Set((state.filters.prodMulti||[]).map(String));
+  prodMulti.innerHTML = '';
   for (const y of prodYears){
     const val = String(y);
-    const sel = (String(currentProd)===val) ? 'selected' : '';
-    prodSel.insertAdjacentHTML('beforeend', `<option value="${val}" ${sel}>${val}</option>`);
+    const sel = curProd.has(val) ? 'selected' : '';
+    prodMulti.insertAdjacentHTML('beforeend', `<option value="${val}" ${sel}>${val}</option>`);
   }
 
-  // Planting options
-  const currentPlant = state.filters.plantYear || 'ALL';
-  plantSel.innerHTML = '';
-  plantSel.insertAdjacentHTML('beforeend', `<option value="ALL" ${currentPlant==='ALL'?'selected':''}>전체</option>`);
+  const curPlant = new Set((state.filters.plantMulti||[]).map(String));
+  plantMulti.innerHTML = '';
   for (const y of plantYears){
     const val = String(y);
-    const sel = (String(currentPlant)===val) ? 'selected' : '';
-    plantSel.insertAdjacentHTML('beforeend', `<option value="${val}" ${sel}>${val}</option>`);
+    const sel = curPlant.has(val) ? 'selected' : '';
+    plantMulti.insertAdjacentHTML('beforeend', `<option value="${val}" ${sel}>${val}</option>`);
   }
 
+  setFiltersUI();
   updateFilterHint();
 }
 
 function applyFiltersAndRerender(){
-  // Re-render summary + current list view with filters applied
   renderHomeSummary();
   applySearch();
   updateFilterHint();
+  saveFilters();
 }
 
 function setupEvents(){
-  el('q').addEventListener('input', applySearch);
-  el('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') openExactOrFirst(); });
-  el('openBtn').addEventListener('click', openExactOrFirst);
-  el('clear').addEventListener('click', () => { el('q').value=''; applySearch(); });
-  el('statsBtn').addEventListener('click', showStatsView);
-  el('statsBack').addEventListener('click', hideStatsView);
-  el('back').addEventListener('click', backToList);
+// Filters (persisted)
+try{
+  const saved = loadSavedFilters();
+  state.filters = saved ? {...defaultFilters(), ...saved} : defaultFilters();
+}catch(e){
+  state.filters = defaultFilters();
 }
 
+const prodMode = el('prodMode');
+const plantMode = el('plantMode');
+const prodMulti = el('prodMulti');
+const plantMulti = el('plantMulti');
 
+function onModeChange(){
+  const f = state.filters || defaultFilters();
+  if (prodMode) f.prodMode = prodMode.value || 'planned';
+  if (plantMode) f.plantMode = plantMode.value || 'all';
+  state.filters = f;
+  setFiltersUI();
+  applyFiltersAndRerender();
+}
 
-function renderHomeSummary(){
-  const rows = activeRows(state.detail || []);
-  const areaSum = rows.reduce((acc,r)=> acc + toNum(r['HA']), 0);
-  const assetSum = rows.reduce((acc,r)=> acc + toNum(r['조림자산 계']), 0);
-  const count = rows.length;
+function onMultiChange(){
+  const f = state.filters || defaultFilters();
+  if (prodMulti){
+    f.prodMulti = Array.from(prodMulti.selectedOptions).map(o=>o.value);
+  }
+  if (plantMulti){
+    f.plantMulti = Array.from(plantMulti.selectedOptions).map(o=>o.value);
+  }
+  state.filters = f;
+  applyFiltersAndRerender();
+}
 
-  const oa = el('overallArea'); if (oa) oa.textContent = fmt(areaSum);
-  const oc = el('overallCount'); if (oc) oc.textContent = fmt(count);
-  const os = el('overallAsset'); if (os) os.textContent = fmt0(assetSum);
+function onRangeChange(){
+  const f = state.filters || defaultFilters();
+  const pf = el('prodFrom'), pt = el('prodTo');
+  const lf = el('plantFrom'), lt = el('plantTo');
+  if (pf) f.prodFrom = pf.value ? parseInt(pf.value,10) : null;
+  if (pt) f.prodTo = pt.value ? parseInt(pt.value,10) : null;
+  if (lf) f.plantFrom = lf.value ? parseInt(lf.value,10) : null;
+  if (lt) f.plantTo = lt.value ? parseInt(lt.value,10) : null;
+  state.filters = f;
+  applyFiltersAndRerender();
+}
 
-  const scopeLabel = el('currentScope');
-  const scopePill = el('scopePill');
-  const clearBtn = el('clearScopeBtn');
-  if (state.scope && state.scope.type === 'region' && state.scope.value){
-    if (scopeLabel) scopeLabel.textContent = `지역: ${state.scope.value}`;
-    if (scopePill){
-      scopePill.style.display = 'inline-block';
-      scopePill.textContent = `지역 필터: ${state.scope.value}`;
-    }
-    if (clearBtn) clearBtn.classList.remove('hidden');
-  } else {
-    if (scopeLabel) scopeLabel.textContent = '전체';
-    if (scopePill){
-      scopePill.style.display = 'none';
-      scopePill.textContent = '';
-    }
-    if (clearBtn) clearBtn.classList.add('hidden');
+if (prodMode) prodMode.addEventListener('change', onModeChange);
+if (plantMode) plantMode.addEventListener('change', onModeChange);
+if (prodMulti) prodMulti.addEventListener('change', onMultiChange);
+if (plantMulti) plantMulti.addEventListener('change', onMultiChange);
+
+const pf = el('prodFrom'), pt = el('prodTo'), lf = el('plantFrom'), lt = el('plantTo');
+if (pf) pf.addEventListener('input', onRangeChange);
+if (pt) pt.addEventListener('input', onRangeChange);
+if (lf) lf.addEventListener('input', onRangeChange);
+if (lt) lt.addEventListener('input', onRangeChange);
+
+  const q = el('q');
+  const openBtn = el('open');
+  const clearBtn = el('clear');
+  const statsBtn = el('statsBtn');
+  const refreshBtn = el('dataRefreshBtn');
+  const prodSel = el('prodYearFilter');
+  const plantSel = el('plantYearFilter');
+
+  // Ensure buttons are clickable even if previous run left them disabled
+  [clearBtn, statsBtn, refreshBtn].forEach(b => { if (b) b.disabled = false; });
+
+  if (q){
+    q.addEventListener('keydown', (e) => { if (e.key === 'Enter') openFirst(); });
+    q.addEventListener('input', () => applySearch());
+  }
+  if (openBtn) openBtn.addEventListener('click', openFirst);
+  if (clearBtn) clearBtn.addEventListener('click', () => { if (q) q.value=''; applySearch(); });
+
+  if (refreshBtn) refreshBtn.addEventListener('click', refreshDataFromServer);
+
+  if (statsBtn) statsBtn.addEventListener('click', () => {
+    el('stats').classList.toggle('hidden');
+    renderStats();
+  });
+
+  if (prodSel){
+    prodSel.addEventListener('change', (e)=>{
+      state.filters = state.filters || {};
+      state.filters.prodYear = (e.target.value===''?null:e.target.value);
+      applyFiltersAndRerender();
+    });
+  }
+  if (plantSel){
+    plantSel.addEventListener('change', (e)=>{
+      state.filters = state.filters || {};
+      state.filters.plantYear = (e.target.value || 'ALL');
+      applyFiltersAndRerender();
+    });
   }
 
-  // Region stats
-  const regions = computeStats(rows, '지역').sort((a,b)=> b.area - a.area);
-  const body = el('regionStatsBody');
-  if (body){
-    body.innerHTML = '';
-    for (const r of regions){
-      const keyEsc = r.key.replace(/"/g,'&quot;');
-      body.insertAdjacentHTML('beforeend',
-        `<tr class="item" data-region="${keyEsc}" style="cursor:pointer">
-           <td>${r.key}</td><td>${fmt(r.area)}</td><td>${fmt(r.count)}</td><td>${fmt0(r.asset)}</td>
-         </tr>`);
-    }
-    // click handlers (event delegation)
-    body.querySelectorAll('tr[data-region]').forEach(tr => {
-      tr.addEventListener('click', () => {
-        const region = tr.getAttribute('data-region');
-        setRegionScope(region);
-      });
+  // Region click delegation
+  const regionTable = el('regionTable');
+  if (regionTable){
+    regionTable.addEventListener('click', (e)=>{
+      const tr = e.target.closest('tr[data-region]');
+      if (!tr) return;
+      const region = tr.getAttribute('data-region');
+      state.scope = {type:'region', value: region};
+      applySearch();
+    });
+  }
+
+  // Overall click
+  const overallCard = el('overallCard');
+  if (overallCard){
+    overallCard.addEventListener('click', ()=>{
+      state.scope = {type:'all', value:null};
+      applySearch();
     });
   }
 }
 
-function setRegionScope(region){
-  state.scope = {type:'region', value: region};
-  el('q').value = '';
-  applySearch();
-  // jump to results
-  const listView = el('listView');
-  if (listView) listView.scrollIntoView({behavior:'smooth', block:'start'});
-}
 
-function clearScope(){
-  state.scope = {type:'all', value:null};
-  el('q').value = '';
-  applySearch();
-}
-
-
-function setupSWUpdate(){
-  if (!('serviceWorker' in navigator)) return;
-
-  const banner = el('updateBanner');
-  const reloadBtn = el('reloadBtn');
-  const dismissBtn = el('dismissBtn');
-
-  function showBanner(){
-    if (banner) banner.classList.remove('hidden');
-  }
-  function hideBanner(){
-    if (banner) banner.classList.add('hidden');
-  }
-
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    // New SW has taken control
-    window.location.reload();
-  });
-
-  navigator.serviceWorker.getRegistration().then((reg) => {
-    if (!reg) return;
-    // If there's already a waiting worker, prompt immediately
-    if (reg.waiting) showBanner();
-
-    reg.addEventListener('updatefound', () => {
-      const newWorker = reg.installing;
-      if (!newWorker) return;
-      newWorker.addEventListener('statechange', () => {
-        if (newWorker.state === 'installed') {
-          // If there's an existing controller, it's an update
-          if (navigator.serviceWorker.controller) showBanner();
-        }
-      });
-    });
-
-    if (reloadBtn){
-      reloadBtn.addEventListener('click', () => {
-        if (reg.waiting){
-          reg.waiting.postMessage({type:'SKIP_WAITING'});
-        } else {
-          // fallback
-          window.location.reload();
-        }
-      });
-    }
-    if (dismissBtn){
-      dismissBtn.addEventListener('click', hideBanner);
-    }
-  });
-}
-
-async function registerSW(){
-  if (!('serviceWorker' in navigator)) return;
-  try {
-    const reg = await navigator.serviceWorker.register('sw.js');
-    // Ask browser to check for updates
-    if (reg && reg.update) reg.update();
-    setupSWUpdate();
-  } catch(e) {}
-}
-
-setupEvents();
-setupInstall();
-loadData();
-registerSW();
