@@ -1,4 +1,4 @@
-const APP_VERSION = 'v8.5.1';
+const APP_VERSION = 'v8.5.2';
 // Field-simple offline-first PWA (read-only)
 const state = {
   list: [],
@@ -326,7 +326,7 @@ function openExactOrFirst(){
   if (state.filtered.length) openDetail(state.filtered[0].CPT);
 }
 
-async async function loadData(){
+async function loadData(){
   const [list, detail, segments] = await Promise.all([
     fetch('data/comp_list.json').then(r=>r.json()),
     fetch('data/comp_detail.json').then(r=>r.json()),
