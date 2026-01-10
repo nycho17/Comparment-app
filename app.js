@@ -327,11 +327,9 @@ function openExactOrFirst(){
 }
 
 async function loadData(){
-  const [list, detail, segments] = await Promise.all([
-    fetch('data/comp_list.json').then(r=>r.json()),
-    fetch('data/comp_detail.json').then(r=>r.json()),
-    fetch('data/segments.json').then(r=>r.json()),
-  ]);
+  const list = await fetch('data/comp_list.json').then(r => r.json());
+  const detail = await fetch('data/comp_detail.json').then(r => r.json());
+  const segments = await fetch('data/segments.json').then(r => r.json());
   state.list = list;
   state.detail = detail;
     const saved = loadSavedFilters();
